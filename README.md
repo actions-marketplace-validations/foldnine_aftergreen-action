@@ -93,9 +93,11 @@ To react to the verdict in later steps, give the step an `id`, set
   attacker-controlled input, especially in `pull_request_target` workflows.
 - It does not block private or internal addresses. On self-hosted runners it can
   reach anything the runner can.
-- Logs, annotations and the job summary never print the URL, the response body
-  or the `contains` value. Still, put secrets in `secrets.*`, not in plain
-  workflow text.
+- This Action's logs, annotations and job summary never print the URL, the
+  response body or the `contains` value. **GitHub itself prints every `with:`
+  value in the step header**, though. If the URL or expected text contains a
+  token, pass it from `secrets.*` so the runner masks it:
+  `url: ${{ secrets.VERSION_ENDPOINT_URL }}`.
 - The Action needs no token and no permissions. Grant your job the least it
   needs (`permissions: contents: read`).
 - Report vulnerabilities via GitHub's private vulnerability reporting on
