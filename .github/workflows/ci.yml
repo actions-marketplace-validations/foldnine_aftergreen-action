@@ -1,0 +1,30 @@
+name: Test Action
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Node tests
+        run: node --test test/*.test.mjs
+      - name: Verify action metadata
+        run: |
+          test -f action.yml
+          node --check src/index.mjs
+          node --check src/check.mjs
+      - name: Local action smoke test
+        id: smoke
+        uses: ./
+        with:
+          url: 'https://example.com/'
+          expected-status: '200'
+      - name: Assert verdict
+        run: test "${{ steps.smoke.outputs.verdict }}" = "VERIFIED"
