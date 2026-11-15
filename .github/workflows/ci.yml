@@ -7,19 +7,23 @@ permissions:
   contents: read
 jobs:
   test:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '24'
-      - name: Node tests
+      - name: Unit, entrypoint and conformance tests
         run: node --test test/*.test.mjs
-      - name: Verify action entrypoint
-        run: |
-          test -f action.yml
-          node --check src/index.mjs
-          node --check src/check.mjs
       - name: Start local fixture
         run: |
           node test/fixture-server.mjs &
@@ -28,14 +32,68 @@ jobs:
             sleep 1
           done
           exit 1
-      - name: Local action smoke test
-        id: smoke
+
+      # The steps below run the Action exactly as consumers do (`uses:`), on the
+      # runner's own node24 runtime.
+      - name: Smoke VERIFIED
+        id: verified
         uses: ./
         with:
           url: http://127.0.0.1:8765/
           expected-status: '200'
           contains: 'version=aftergreen-smoke'
-      - name: Assert verdict
+      - name: Smoke FAILED (must fail the step)
+        id: failed
+        continue-on-error: true
+        uses: ./
+        with:
+          url: http://127.0.0.1:8765/old
+          contains: 'version=aftergreen-smoke'
+      - name: Smoke UNKNOWN (must fail the step)
+        id: unknown
+        continue-on-error: true
+        uses: ./
+        with:
+          url: http://127.0.0.1:8766/
+          timeout-seconds: '2'
+      - name: Smoke invalid input (must fail the step)
+        id: invalid
+        continue-on-error: true
+        uses: ./
+        with:
+          url: http://127.0.0.1:8765/
+          expected-status: 'abc'
+      - name: Assert smoke outcomes
         env:
-          VERDICT: ${{ steps.smoke.outputs.verdict }}
-        run: test "$VERDICT" = "VERIFIED"
+          V_VERDICT: ${{ steps.verified.outputs.verdict }}
+          V_STATUS: ${{ steps.verified.outputs.observed-status }}
+          F_OUTCOME: ${{ steps.failed.outcome }}
+          F_VERDICT: ${{ steps.failed.outputs.verdict }}
+          F_STATUS: ${{ steps.failed.outputs.observed-status }}
+          U_OUTCOME: ${{ steps.unknown.outcome }}
+          U_VERDICT: ${{ steps.unknown.outputs.verdict }}
+          I_OUTCOME: ${{ steps.invalid.outcome }}
+          I_VERDICT: ${{ steps.invalid.outputs.verdict }}
+        run: |
+          set -x
+          test "$V_VERDICT" = VERIFIED && test "$V_STATUS" = 200
+          test "$F_OUTCOME" = failure && test "$F_VERDICT" = FAILED && test "$F_STATUS" = 200
+          test "$U_OUTCOME" = failure && test "$U_VERDICT" = UNKNOWN
+          test "$I_OUTCOME" = failure && test -z "$I_VERDICT"
+
+  conformance-sync:
+    # The conformance cases are owned by foldnine/aftergreen. Fail if the vendored
+    # copy drifts from the pinned commit recorded in test/conformance/SOURCE.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Compare vendored conformance cases with core
+        run: |
+          field() { sed -n "s/^$1=//p" test/conformance/SOURCE; }
+          repository=$(field repository); path=$(field path); commit=$(field commit)
+          [[ "$repository" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ && "$path" =~ ^[A-Za-z0-9_./-]+$ && "$commit" =~ ^[0-9a-f]{40}$ ]]
+          curl --fail --silent --show-error --location \
+            "https://raw.githubusercontent.com/${repository}/${commit}/${path}" -o /tmp/upstream.json
+          diff -u /tmp/upstream.json test/conformance/http-cases.json
