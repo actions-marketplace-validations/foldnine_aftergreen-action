@@ -1,19 +1,14 @@
-import { appendFileSync } from 'node:fs';
-import { parseContract, verify } from './check.mjs';
+// GitHub Action entrypoint. Dependency-free: only Node 24 built-ins are used.
+import { ContractError, parseContract, verify } from './check.mjs';
+import http from 'node:http';
+import { annotate, input, setOutput, summary } from './workflow.mjs';
 
-function input(name, fallback = '') {
-  return process.env['INPUT_' + name.toUpperCase()] ??
-         process.env['INPUT_' + name.toUpperCase().replaceAll('-', '_')] ??
-         fallback;
+// Honor HTTP_PROXY / HTTPS_PROXY / NO_PROXY like the Go CLI does (self-hosted
+// runners behind a proxy). Available from Node 24.14; older runtimes skip it.
+if (typeof http.setGlobalProxyFromEnv === 'function') {
+  try { http.setGlobalProxyFromEnv(); } catch { /* malformed proxy env: fall back to direct */ }
 }
-function output(name, value) {
-  const file = process.env.GITHUB_OUTPUT;
-  if (file) appendFileSync(file, `${name}=${String(value)}\n`);
-}
-function error(message) {
-  // Do not echo the requested URL, response body, or expected substring.
-  console.error('::error::' + String(message).replace(/[\r\n]/g, ' '));
-}
+
 async function main() {
   let contract;
   try {
@@ -24,25 +19,39 @@ async function main() {
       timeoutSeconds: input('timeout-seconds', '10')
     });
   } catch (err) {
-    output('verdict', 'UNKNOWN');
-    error('Invalid AfterGreen configuration: ' + err.message);
-    process.exitCode = 2;
-    return;
+    // Invalid configuration is not a verification result: no verdict output is set.
+    const message = err instanceof ContractError ? err.message : 'invalid inputs';
+    annotate('error', `AfterGreen configuration invalid: ${message}`);
+    summary(`### AfterGreen: configuration invalid\n\n${message}`);
+    return 2;
   }
+
   const result = await verify(contract);
-  output('verdict', result.verdict);
-  output('observed-status', result.observedStatus ?? '');
-  const icon = result.verdict === 'VERIFIED' ? '✓' : '✗';
-  console.log(`AfterGreen ${icon} ${result.verdict}`);
+  setOutput('verdict', result.verdict);
+  setOutput('observed-status', result.observedStatus ?? '');
+
+  // Never print the URL, the response body or the expected text: any of them may be secret.
+  console.log(`AfterGreen verdict: ${result.verdict}`);
   if (result.observedStatus !== null) console.log(`Observed HTTP status: ${result.observedStatus}`);
   for (const reason of result.reasons) console.log(`Reason: ${reason}`);
-  if (result.verdict !== 'VERIFIED') {
-    error(result.verdict === 'UNKNOWN' ? 'Outcome could not be verified' : 'Outcome assertion failed');
-    process.exitCode = 1;
-  }
+  summary([
+    `### AfterGreen: ${result.verdict}`,
+    '',
+    `Observed HTTP status: ${result.observedStatus ?? 'none'}`,
+    ...result.reasons.map(reason => `- ${reason}`)
+  ].join('\n'));
+
+  if (result.verdict === 'VERIFIED') return 0;
+  annotate('error', result.verdict === 'FAILED'
+    ? `AfterGreen FAILED: ${result.reasons.join('; ')}`
+    : `AfterGreen UNKNOWN: outcome could not be verified (${result.reasons.join('; ')})`);
+  return 1;
 }
-await main().catch(() => {
-  output('verdict', 'UNKNOWN');
-  error('Unexpected verification error');
+
+try {
+  process.exitCode = await main();
+} catch {
+  setOutput('verdict', 'UNKNOWN');
+  annotate('error', 'AfterGreen UNKNOWN: unexpected internal error');
   process.exitCode = 1;
-});
+}

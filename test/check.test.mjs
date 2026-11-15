@@ -1,51 +1,55 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createServer } from 'node:http';
-import { once } from 'node:events';
-import { parseContract, verify } from '../src/check.mjs';
+import { ContractError, parseContract, verify } from '../src/check.mjs';
+import { escapeCommandData } from '../src/workflow.mjs';
 
-async function server(handler) {
-  const app = createServer(handler);
-  app.listen(0, '127.0.0.1');
-  await once(app, 'listening');
-  return { url: `http://127.0.0.1:${app.address().port}`, close: () => new Promise(resolve => app.close(resolve)) };
-}
-const contract = (url, options = {}) => parseContract({ url, ...options });
+const ok = { url: 'https://deploy.example.invalid/version' };
 
-test('verifies matching status and body', async () => {
-  const app = await server((req, res) => { res.writeHead(200); res.end('version=abc123'); });
-  try {
-    assert.equal((await verify(contract(app.url, { contains: 'abc123' }))).verdict, 'VERIFIED');
-    assert.equal((await verify(contract(app.url, { contains: 'xyz' }))).verdict, 'FAILED');
-    assert.equal((await verify(contract(app.url, { expectedStatus: '201' }))).verdict, 'FAILED');
-  } finally { await app.close(); }
+test('accepts a minimal contract with defaults', () => {
+  assert.deepEqual(parseContract(ok), {
+    url: 'https://deploy.example.invalid/version', expectedStatus: 200, contains: '', timeoutMs: 10000
+  });
 });
-test('does not follow redirect to another endpoint', async () => {
-  let targetReached = false;
-  const target = await server((_req, res) => { targetReached = true; res.end('secret'); });
-  const redirect = await server((_req, res) => { res.writeHead(302, { location: target.url }); res.end(); });
-  try {
-    const result = await verify(contract(redirect.url));
-    assert.equal(result.verdict, 'FAILED');
-    assert.equal(result.observedStatus, 302);
-    assert.equal(targetReached, false);
-  } finally { await redirect.close(); await target.close(); }
+
+test('trims numeric inputs and URL but keeps contains literal', () => {
+  const c = parseContract({ url: '  https://deploy.example.invalid/v \n', expectedStatus: ' 204 ', timeoutSeconds: '5\n', contains: ' a ' });
+  assert.equal(c.url, 'https://deploy.example.invalid/v');
+  assert.equal(c.expectedStatus, 204);
+  assert.equal(c.timeoutMs, 5000);
+  assert.equal(c.contains, ' a ');
 });
-test('reports unknown on unavailable network', async () => {
-  const result = await verify(contract('http://localhost.test.invalid'), async () => { throw Error('offline'); });
-  assert.equal(result.verdict, 'UNKNOWN');
+
+test('rejects malformed numeric inputs', () => {
+  for (const expectedStatus of ['', 'abc', '200.5', '-200', '2e2', '0x0C8', '99', '600'])
+    assert.throws(() => parseContract({ ...ok, expectedStatus }), ContractError, expectedStatus);
+  for (const timeoutSeconds of ['0', '61', '1.5', '10s', '-1', 'NaN'])
+    assert.throws(() => parseContract({ ...ok, timeoutSeconds }), ContractError, timeoutSeconds);
 });
-test('reports unknown on oversized body', async () => {
-  const app = await server((_req, res) => { res.writeHead(200); res.end('X'.repeat(1024 * 1024 + 1)); });
-  try {
-    const result = await verify(contract(app.url, { contains: 'HEALTHY' }));
-    assert.equal(result.verdict, 'UNKNOWN');
-  } finally { await app.close(); }
-});
-test('validates contract without echoing secrets', () => {
-  for (const url of ['file:///etc/passwd', 'https://user:pass@example.com', 'http://', 'https://example.com/path#fragment']) {
-    assert.throws(() => contract(url));
+
+test('rejects unsafe URLs without echoing them', () => {
+  for (const url of ['', '   ', 'not a url', 'javascript:alert(1)', 'https://:tok@deploy.example.invalid/']) {
+    assert.throws(() => parseContract({ url }), err => {
+      assert.ok(err instanceof ContractError);
+      assert.ok(!err.message.includes('tok'), err.message);
+      return true;
+    });
   }
-  for (const expectedStatus of ['0', '600', 'abc', '200.5']) assert.throws(() => contract('https://example.com', { expectedStatus }));
-  for (const timeoutSeconds of ['0', '61', '1.5']) assert.throws(() => contract('https://example.com', { timeoutSeconds }));
+});
+
+test('transport failure is UNKNOWN with no observed status', async () => {
+  const result = await verify(parseContract(ok), async () => { throw new TypeError('fetch failed'); });
+  assert.deepEqual(result, { verdict: 'UNKNOWN', observedStatus: null, reasons: ['HTTP observation unavailable'] });
+});
+
+test('sends no credentials and does not follow redirects', async () => {
+  let seen;
+  await verify(parseContract(ok), async (_url, init) => { seen = init; return new Response('', { status: 200 }); });
+  assert.equal(seen.redirect, 'manual');
+  assert.equal(seen.credentials, 'omit');
+  assert.equal(seen.method, 'GET');
+  assert.equal(seen.headers['user-agent'], 'aftergreen-action');
+});
+
+test('escapes workflow command data', () => {
+  assert.equal(escapeCommandData('50%\r\n::warning::x'), '50%25%0D%0A::warning::x');
 });
