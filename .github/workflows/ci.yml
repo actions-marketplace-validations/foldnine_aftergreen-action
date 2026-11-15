@@ -15,16 +15,27 @@ jobs:
           node-version: '24'
       - name: Node tests
         run: node --test test/*.test.mjs
-      - name: Verify action metadata
+      - name: Verify action entrypoint
         run: |
           test -f action.yml
           node --check src/index.mjs
           node --check src/check.mjs
+      - name: Start local fixture
+        run: |
+          node test/fixture-server.mjs &
+          for i in $(seq 1 30); do
+            if curl --silent --fail http://127.0.0.1:8765/ > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
       - name: Local action smoke test
         id: smoke
         uses: ./
         with:
-          url: 'https://example.com/'
+          url: http://127.0.0.1:8765/
           expected-status: '200'
+          contains: 'version=aftergreen-smoke'
       - name: Assert verdict
-        run: test "${{ steps.smoke.outputs.verdict }}" = "VERIFIED"
+        env:
+          VERDICT: ${{ steps.smoke.outputs.verdict }}
+        run: test "$VERDICT" = "VERIFIED"
