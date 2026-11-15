@@ -4,4 +4,4 @@
 # CI fetches the file at this exact commit and fails if this copy differs.
 repository=foldnine/aftergreen
 path=conformance/http/cases.json
-commit=7428243485a21a4eb4d70e63d137aa729a21fe0f
+commit=34536f80bedf2a3631c69479877a56313339a435
