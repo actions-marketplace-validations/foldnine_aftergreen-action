@@ -1,0 +1,30 @@
+name: "AfterGreen HTTP Outcome Verification"
+description: "Verify that your deployment actually responds as expected—not just that CI succeeded."
+author: "FoldNine"
+branding:
+  icon: "check-circle"
+  color: "green"
+inputs:
+  url:
+    description: "Trusted HTTP(S) endpoint to verify"
+    required: true
+  expected-status:
+    description: "Expected HTTP status code (100-599)"
+    required: false
+    default: "200"
+  contains:
+    description: "Optional literal substring required in the HTTP response body"
+    required: false
+    default: ""
+  timeout-seconds:
+    description: "Timeout in seconds (1-60)"
+    required: false
+    default: "10"
+outputs:
+  verdict:
+    description: "VERIFIED, FAILED, or UNKNOWN"
+  observed-status:
+    description: "Observed HTTP status (when available)"
+runs:
+  using: "node24"
+  main: "src/index.mjs"
