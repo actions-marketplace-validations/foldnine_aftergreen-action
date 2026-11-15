@@ -6,9 +6,10 @@ import { spawn } from 'node:child_process';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { serveCase, unreachableBase } from './fixture-http.mjs';
 
-const entry = new URL('../src/index.mjs', import.meta.url).pathname;
+const entry = fileURLToPath(new URL('../src/index.mjs', import.meta.url));
 
 function parseOutputs(text) {
   const out = {};
