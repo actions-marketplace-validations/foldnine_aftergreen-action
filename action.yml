@@ -2,8 +2,8 @@ name: "AfterGreen HTTP Outcome Verification"
 description: "Verify a deployment's real HTTP outcome (status and response text), not just that CI went green."
 author: "FoldNine"
 branding:
-  icon: "check-circle"
-  color: "green"
+  icon: "layers"
+  color: "gray-dark"
 inputs:
   url:
     description: "Maintainer-controlled http(s) URL to check. Never pass untrusted input (PR titles, issue text). Must not contain credentials or a #fragment."
