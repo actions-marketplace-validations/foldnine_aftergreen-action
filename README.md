@@ -127,7 +127,7 @@ node --test test/*.test.mjs   # unit, entrypoint and conformance tests; local fi
 Requires Node 24. No `npm install`. See [RELEASING.md](RELEASING.md) for the
 release process.
 
-`main` is protected by a ruleset: pull requests only, no force pushes, and the
+`main` is protected by a ruleset: pull requests only, no force pushes or deletion, and the
 `test (ubuntu-latest)`, `test (macos-latest)`, `test (windows-latest)` and
 `conformance-sync` checks must pass. If you rename a CI job, update the ruleset too.
 
