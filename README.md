@@ -1,4 +1,10 @@
-# AfterGreen Action
+<h1>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="brand/aftergreen-on-dark.svg">
+    <img src="brand/aftergreen-light.svg" alt="AfterGreen" width="340">
+  </picture>
+  <br>Action
+</h1>
 
 **Green isn't proof. Verify what actually happened.**
 
