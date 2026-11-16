@@ -1,0 +1,30 @@
+name: "AfterGreen HTTP Outcome Verification"
+description: "Verify a deployment's real HTTP outcome (status and response text), not just that CI went green."
+author: "FoldNine"
+branding:
+  icon: "check-circle"
+  color: "green"
+inputs:
+  url:
+    description: "Maintainer-controlled http(s) URL to check. Never pass untrusted input (PR titles, issue text). Must not contain credentials or a #fragment."
+    required: true
+  expected-status:
+    description: "Expected HTTP status code, 100-599. Redirects are not followed, so a 3xx is observed as-is."
+    required: false
+    default: "200"
+  contains:
+    description: "Optional literal, case-sensitive text that must appear in the response body (read up to 1 MiB). Use a unique build or version ID."
+    required: false
+    default: ""
+  timeout-seconds:
+    description: "Whole seconds, 1-60, for the entire request including the body."
+    required: false
+    default: "10"
+outputs:
+  verdict:
+    description: "VERIFIED, FAILED or UNKNOWN. Not set when the inputs are invalid."
+  observed-status:
+    description: "Observed HTTP status code; empty when no response was received."
+runs:
+  using: "node24"
+  main: "src/index.mjs"

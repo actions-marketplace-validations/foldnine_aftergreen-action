@@ -1,0 +1,7 @@
+# Canonical copy of http-cases.json lives in the core repository.
+# Until foldnine/aftergreen PR (feat/core-quality-http-contract) merges, this pins
+# a commit on that branch; re-pin to a main commit before release.
+# CI fetches the file at this exact commit and fails if this copy differs.
+repository=foldnine/aftergreen
+path=conformance/http/cases.json
+commit=34536f80bedf2a3631c69479877a56313339a435
