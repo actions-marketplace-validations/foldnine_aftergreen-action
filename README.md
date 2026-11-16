@@ -13,9 +13,9 @@ deployed endpoint actually responds as expected. It is part of
 [AfterGreen](https://github.com/foldnine/aftergreen), built by
 [FoldNine](https://foldnine.dev).
 
-> **Status: preview, not released.** There is no release, no `v1` tag and no
-> Marketplace listing yet. Until there is, you can only use it pinned to a full
-> commit SHA of this repository, at your own risk.
+> **Status: v1.** HTTP checks only. Releases are immutable: a published
+> `vX.Y.Z` tag never moves. `v1` is a convenience tag that follows the latest
+> `v1.x.y`.
 
 ## What it does
 
@@ -41,7 +41,7 @@ jobs:
       # ... your deploy ...
       - name: Verify the deployed build is live
         id: aftergreen
-        uses: foldnine/aftergreen-action@<full-commit-sha>  # no released version exists yet
+        uses: foldnine/aftergreen-action@v1.0.0  # immutable; or pin the release's full commit SHA
         with:
           url: https://app.example.com/version
           expected-status: '200'
