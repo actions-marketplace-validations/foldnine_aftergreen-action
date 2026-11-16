@@ -41,7 +41,7 @@ jobs:
       # ... your deploy ...
       - name: Verify the deployed build is live
         id: aftergreen
-        uses: foldnine/aftergreen-action@v1.0.0  # immutable; or pin the release's full commit SHA
+        uses: foldnine/aftergreen-action@v1.0.1  # immutable; or pin the commit: @7e6b877b9ae0b18ed9bae9b4604d35f0d45ab043
         with:
           url: https://app.example.com/version
           expected-status: '200'
